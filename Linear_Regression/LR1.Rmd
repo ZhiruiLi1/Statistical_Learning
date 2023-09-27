@@ -1,0 +1,391 @@
+---
+title: "DATA2020HW2"
+author: "Zhirui Li"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# Transformations of Variables
+
+a)
+
+$β_{1}$ represents how much the mean of the dependent variable blood pressure changes given a one unit increase in the independent variable age while holding other independent variables constant.
+
+$β_{2}$ represents how much the mean of the dependent variable blood pressure changes given a one unit increase in the independent variable body mass index while holding other independent variables constant.
+
+$β_{3}$ represents how much the mean of the dependent variable blood pressure changes given that someone is pregnant while holding other independent variables constant.
+
+$β_{0}$ represents the expected mean value of the dependent variable blood pressure when someone is 0 years old, has a body mass index 0, and not pregnant. 
+
+(b)
+
+$β_{1}$ represents the average change of the dependent variable blood pressure  when age minus mean of the age increases by 1 unit while holding other independent variables constant, which is equivalent to the average change in blood pressure when the age increases by 1 unit. 
+
+$β_{2}$ represents the average change of the dependent variable blood pressure  when BMI minus mean of the BMI increases by 1 unit while holding other independent variables constant, which is equivalent to the average change in blood pressure when the age increases by 1 unit. 
+
+$β_{3}$ represents how much the mean of the dependent variable blood pressure changes given that someone is pregnant while holding other independent variables constant.
+
+$β_{0}$ represents the expected mean value of the dependent variable blood pressure when someone has average age, average BMI, and not pregnant.
+(c)
+
+$β_{1}$ represents a change of 1 standard deviation in age is associated with a change of $β_{1}$ in blood pressure while holding other independent variables constant. 
+
+$β_{2}$ represents a change of 1 standard deviation in BMI is associated with a change of $β_{2}$ in blood pressure while holding other independent variables constant. 
+
+$β_{3}$ represents how much the mean of the dependent variable blood pressure changes given that someone is pregnant while holding other independent variables constant.
+
+$β_{0}$ represents the expected mean value of the dependent variable blood pressure when someone has average age, average BMI, and not pregnant. 
+
+(d)
+
+Since $X_{3}$ is a dummy varibale, it only takes two values: either 1 when somebody is pregnant or 0 when somebody is not pregnant. It is meaningless to center it or standardize it. For numerical variables, we typically apply log transform or standardize it. For categorical variables, we typically apply one-hot encoding. 
+
+
+# Simulation
+(a)
+```{r}
+set.seed(123)
+y = rnorm(100, 10, 4)
+x = rnorm(100, 3, 1)
+model = lm(y ~ x)
+summary(model)
+plot(x,y)
+```
+
+The p-value for the coefficient $β_{1}$ is 0.625, which is really large. We failt to reject the null hypothesis that $β_{1} = 0$. 
+
+(b)
+```{r}
+set.seed(123)
+p_values = vector()   # initialize an empty vector 
+for (i in 1:1000){
+  y = rnorm(100, 10, 4)
+  x = rnorm(100, 3, 1)
+  model = lm(y ~ x)
+  p = summary(model)$coefficients[2,4]    # extract p_value for β1
+  p_values = c(p_values, p)   # add each p_value to the vector 
+}
+
+hist(p_values)
+plot(density(p_values))
+```
+
+Above graphs are the distribution of the p values. 
+
+```{r}
+sum(p_values < 0.05) / 1000
+```
+
+The proportion of times the p-value is less than 0.05 is 0.053. Only 5.3% of the time the estimated  β1  is significant means that y and x does not have a linear relationship. This result matches my intuition since there is no linear relationship between y and x. If we fix the type-I error rate ( α ) to be 5%, then there are around 5% of the time when the null hypothesis is true and we reject the null. Thus, we are simulating the type-I error rate here.
+
+(c)
+```{r}
+set.seed(123)
+x = rnorm(100, 3 ,1)
+y = rnorm(100, 10+x, 1)
+model = lm(y ~ x)
+summary(model)
+plot(x, y)
+```
+
+```{r}
+set.seed(123)
+p_values = vector()   # initialize an empty vector 
+for (i in 1:1000){
+  x = rnorm(100, 3 ,1)
+  y = rnorm(100, 10+x, 1)
+  model = lm(y ~ x)
+  p = summary(model)$coefficients[2,4]    # extract p_value for β1
+  p_values = c(p_values, p)   # add each p_value to the vector 
+}
+
+hist(p_values)
+sum(p_values < 0.05) / 1000
+```
+
+The p value for  β1  is really small here and we can reject the null hypothesis. Now, we are simulating type-II error: when the alternative hypothesis is true and we fail to reject the null. The proportion of times the p value is less than 0.05 is 1 here means that we correctly reject the null hypothesis every time for the 1000 simulations.
+
+
+# Linear Regression Application
+```{r}
+library(GGally)
+library(tidyverse)
+library(ggplot2)
+library(naniar)
+```
+
+```{r}
+options(warn=-1)
+```
+
+```{r}
+college = read.csv("/Users/justinli/Desktop/DATA2020/HW2/college_scorecard.csv")
+attach(college)
+head(college)
+names(college)
+```
+
+```{r}
+# drop useless columns 
+college = college %>% select(-c(UNITID, OPEID, CITY, STABBR, ACCREDAGENCY, INSTURL, NPCURL, SCH_DEG, CCUGPROF, CCSIZSET))
+head(college)
+```
+
+```{r}
+# all rows, columns start from 16 to the end
+# 2 means apply to columns 
+# convert everything to numeric 
+college[,16:ncol(college)] <- apply(college[,16:ncol(college)], 2, as.numeric)
+
+# all rows, columns start from 2 to 15
+# 2 means apply to columns
+# convert everything to factor                                      
+college[,2:15] <- apply(college[,2:15], 2, as.factor)
+```
+
+```{r}
+# complete.cases(college$MD_EARN_WNE_P10) returns boolean statement 
+# takes all rows that do not have missing values in MD_EARN_WNE_P10 and all columns
+# 2 means apply to columns 
+# calculating the proportion of missing data 
+
+college = college[complete.cases(college$MD_EARN_WNE_P10),]
+apply(college, 2,  function(x) sum(complete.cases(x))/nrow(college)) 
+```
+
+We can see that columns containing admission rate, SAT, and ACT have a large portion of the data missing, so we remove them from the dataset.
+
+
+```{r}
+college = college %>% select(-c(ADM_RATE, SATVRMID, SATMTMID, SATWRMID, ACTCMMID, ACTENMID, ACTMTMID, ACTWRMID, SAT_AVG))
+names(college)
+```
+
+Then, we can combine columns NPT4_PUB and NPT4_PRIV, NUM4_PUB and NUM4_PRIV to a single column because they code public and private school separately.
+
+
+```{r}
+# is.na(college_df$NPT4_PRIV) contains TRUE or FALSE values
+# college_df$NPT4_PUB: what to return if test is TRUE
+# college_df$NPT4_PRIVL: what to return if test is FALSE 
+
+college$NPT <- ifelse(is.na(college$NPT4_PRIV), 
+                         college$NPT4_PUB,
+                         college$NPT4_PRIV)
+college$NUM <- ifelse(is.na(college$NUM4_PRIV), 
+                         college$NUM4_PUB,
+                         college$NUM4_PRIV)
+```
+
+
+```{r}
+y = college$MD_EARN_WNE_P10
+college = college %>% select(-c(NPT4_PUB, NPT4_PRIV, NUM4_PUB, NUM4_PRIV))
+```
+
+```{r}
+ggpairs(college[,c(16:26, 72)])
+```
+
+From above scatter plot matrix, we can see that no variable has a relatively strong correlation with the target variable.
+
+```{r}
+ggpairs(college[,c(27:37, 72)])
+```
+
+From above scatterplot matrix, we can see that no variable has a relatively strong correlation with the target variable.
+
+```{r}
+ggpairs(college[,c(38:48, 72)])
+```
+
+From above scatterplot matrix, we can see that no variable has a relatively strong correlation with the target variable.
+
+
+```{r}
+ggpairs(college[,c(49:59, 72)])
+```
+
+From above scatterplot matrix, we can see that COSTT4_A, TUITIONFEE_IN, TUITIONFEE_OUT, and AVGFACSAL have a relatively strong correlation with the target variable.
+
+
+```{r}
+ggpairs(college[,c(60:70, 72)])
+```
+
+From above scatterplot matrix, we can see that PCTPELL, C150_4, PAR_ED_PCT_1STGEN, and PELL_EVER have a relatively strong correlation with the target variable.
+
+
+```{r}
+ggpairs(college[,c(2:16, 72)])
+```
+
+From above scatterplot matrix, we can see that PCTPELL, C150_4, PAR_ED_PCT_1STGEN, and PELL_EVER have a relatively strong correlation with the target variable.
+
+
+```{r}
+ggplot(data = college) + geom_boxplot(aes(x = PREDDEG, y = y))
+ggplot(data = college) + geom_boxplot(aes(x = HIGHDEG, y = y))
+ggplot(data = college) + geom_boxplot(aes(x = CONTROL, y = y))
+ggplot(data = college) + geom_boxplot(aes(x = REGION, y = y))
+```
+
+Now, we are experimenting the relationship between the dummy variables and the target variable. From above boxplot matrix, we can see that independent variables such as PREDDEG and HIGHDEG have a relatively signficiant correlation with the target variable.
+
+
+```{r}
+library(leaps)
+```
+
+```{r}
+model1 <- regsubsets(y~., data = college[,c(3, 4, 55, 56, 57, 59, 61, 62, 64, 67)], nvmax = 10)
+summary(model1)
+```
+
+```{r}
+scores = summary(model1)
+data.frame(
+  Adj.R2 = which.max(scores$adjr2),
+  CP = which.min(scores$cp),
+  BIC = which.min(scores$bic)
+)
+```
+
+By running the best subset regression, the model with the highest adjusted R squared value, lowest Mallows's Cp value, and lowest BIC are model 10, model 9, and model 5 respectively. We will choose the model chosen by adjusted R squared as our model since it measures the percentage of variance in the target variable that is explained by the independent variables. Thus, the predictors for our model includes: PREDDEG, COSTT4_A, TUITIONFEE_IN, TUITIONFEE_OUT, AVGFACSAL, PCTPELL, C150_4, PAR_ED_PCT_1STGEN, and PELL_EVER.
+
+
+```{r}
+grep("PREDDEG", colnames(college))
+grep("COSTT4_A", colnames(college))
+grep("TUITIONFEE_IN", colnames(college))
+grep("TUITIONFEE_OUT", colnames(college))
+grep("AVGFACSAL", colnames(college))
+grep("PCTPELL", colnames(college))
+grep("C150_4", colnames(college))
+grep("PAR_ED_PCT_1STGEN", colnames(college))
+grep("PELL_EVER", colnames(college))
+ggpairs(college[,c(3,55,56,57,59,61,62,64,67, 72)])
+```
+
+Since TUITIONFEE_IN and TUITIONFEE_OUT have strong correlation, we drop them from our model.
+
+
+```{r}
+hist(college$MD_EARN_WNE_P10) 
+hist(log(college$MD_EARN_WNE_P10))
+```
+
+From the first graph, we can see that the dependent variable "MD_EARN_WNE_P10" is right-skewed. After applying log transform (all the values must be positive), the shape is more ideal.
+
+
+```{r}
+model2 = lm(log(y) ~ PREDDEG + COSTT4_A + AVGFACSAL + PCTPELL+ C150_4 + PAR_ED_PCT_1STGEN + PELL_EVER, data = college)
+summary(model2)
+```
+
+We can see from the summary table that all the  β  coefficients have low p values, so that we reject all the nulls and all of them are significant in our model. Now, we need to check whether this model meets the "LINE" conditions or not.
+
+
+```{r}
+plot(model2)
+```
+
+From the residuals vs fitted values and standardized residuals vs fitted values graphs, we can see that these graphs are "well-behaved" because data points randomly bounce around. Moreover, from the residuals vs fitted values graph, we don't observe any drastic outliers. From the normal Q-Q plot, we can see that the residuals are approximately normally distributed as well. From the residuals vs leverage graph, we can see that there are no concerning influential points that need to be addressed (all cases are well inside of the Cook’s distance lines).
+
+
+```{r}
+model3 = lm(log(y) ~ COSTT4_A, data = college)
+summary(model2)
+res1 = resid(model3)
+plot(fitted(model3), res1)
+abline(0, 0)
+```
+
+```{r}
+model4 = lm(log(y) ~ AVGFACSAL, data = college)
+summary(model4)
+res2 = resid(model4)
+plot(fitted(model4), res2)
+abline(0, 0)
+```
+
+```{r}
+model5 = lm(log(y) ~ PCTPELL, data = college)
+summary(model5)
+res3 = resid(model5)
+plot(fitted(model5), res3)
+abline(0, 0)
+```
+
+
+```{r}
+model6 = lm(log(y) ~ C150_4, data = college)
+summary(model6)
+res4 = resid(model6)
+plot(fitted(model6), res4)
+abline(0, 0)
+```
+
+
+```{r}
+model7 = lm(log(y) ~ PAR_ED_PCT_1STGEN, data = college)
+summary(model7)
+res5 = resid(model7)
+plot(fitted(model7), res5)
+abline(0, 0)
+```
+
+
+```{r}
+model8 = lm(log(y) ~ PELL_EVER, data = college)
+summary(model8)
+res6 = resid(model8)
+plot(fitted(model8), res6)
+abline(0, 0)
+```
+
+After plotting the residuals vs fitted values plot for each independent variable, I suspect that we should include PAR_ED_PCT_1STGEN squared term in our model since there seems to be a parabola trend in the residuals vs fitted values plot.
+
+
+```{r}
+model9 = lm(log(y) ~ PREDDEG + COSTT4_A + AVGFACSAL + PCTPELL+ C150_4 + PELL_EVER + PAR_ED_PCT_1STGEN + I(PAR_ED_PCT_1STGEN^2), data = college)
+summary(model9)
+```
+
+After running the model, it turns out to be not significant, so we will go with the original model.
+
+
+```{r}
+model10 = lm(log(y) ~ PREDDEG + COSTT4_A + AVGFACSAL + PCTPELL+ C150_4 + PAR_ED_PCT_1STGEN + PELL_EVER, data = college)
+model11 = lm(log(y) ~ PREDDEG + COSTT4_A + AVGFACSAL + PCTPELL+ C150_4 + PAR_ED_PCT_1STGEN + PELL_EVER + PREDDEG*PELL_EVER, data = college)
+anova(model10, model11)
+```
+
+After finishing construct model10, we suspect that PREDDEG and PELL_EVER might have an interaction effect, so that we conduct ANOVA to figure it out. The p value for the coefficient of the interaction term is really small so that we will go with the model with the interaction term.
+
+
+So the final regression model is:
+$log(y) = {β_{0}} \: + {β_{1}} \:*\: PREDDEG2 \:+\: {β_{2}} \:*\: PREDDEG3 \:+ {β_{3}} \:*\: COSTT4\_A \: + \: {β_{4}} \:*\: AVGFACSAL \: + \:{β_{5}} \:*\: PCTPELL \: + \: {β_{6}} \:*\: C150\_4 \:+\: {β_{7}} \:*\: PAR\_ED\_PCT\_1STGEN \: + \: {β_{8}} \:*\: PELL\_EVER \:+\: {β_{9}} \:*\: PREDDEG2:PELL\_EVER \:+\: {β_{10}} \:*\: PREDDEG3:PELL\_EVER$
+
+
+```{r}
+summary(model11)
+```
+
+From the summary table, we can see that our final model achieves an adjusted R-squared around 0.7306. 
+
+
+# Summary
+The model we select to predict log(median earnings of students working and not enrolled 10 years after entry) is as follow:
+
+$log(y) = {β_{0}} \: + {β_{1}} \:*\: PREDDEG2 \:+\: {β_{2}} \:*\: PREDDEG3 \:+ {β_{3}} \:*\: COSTT4\_A \: + \: {β_{4}} \:*\: AVGFACSAL \: + \:{β_{5}} \:*\: PCTPELL \: + \: {β_{6}} \:*\: C150\_4 \:+\: {β_{7}} \:*\: PAR\_ED\_PCT\_1STGEN \: + \: {β_{8}} \:*\: PELL\_EVER \:+\: {β_{9}} \:*\: PREDDEG2:PELL\_EVER \:+\: {β_{10}} \:*\: PREDDEG3:PELL\_EVER$
+
+${β_{1}, \:β_{2}, \:β_{9},\:}$ and ${\:β_{10}}$ all are coefficients for the dummy variable one-hot encoded bases on the independent variable "PREDDEG". Moreover, $β_{9}$ and $\:β_{10}$ show the interaction effect between categorical variable "PREDDEG" and continuous variable "PELL_EVER". If you have an associate's degree (PREDDEG2 = 1), your earning will increase by around 54% ($e^{0.4343} - 1$). If you have an bachelor's degree (PREDDEG3 = 1), your earning will increase by around 22% ($e^{0.1986} - 1$). When you have an associate's degree and share of students who received a Pell Grant while in school(PELL_EVER) increase by 1 unit, the earning will decrease by 57% ($e^{0.4343} - 1$). When you have an bachelor's degree and share of students who received a Pell Grant while in school(PELL_EVER) increase by 1 unit, the earning will decrease by 6% ($e^{0.06142} - 1$). 
+
+${β_{3}, \:β_{4}, \:β_{6},\:}$ and ${\:β_{7}}$ for "COSTT4_A", "AVGFACSAL", "C150_4 ", and "PAR_ED_PCT_1STGEN" all have positive coefficients, which means that increase the independent variable by 1 unit will increase the dependent variable. $β_{5}$ and $\:β_{8}$ for "PCTPELL" and "PELL_EVER" have negative coefficients, which means that increase the independent varibale by 1 unit will decrease the dependent variable.
+
+After implementing this model, approximately 73% of the variance in the median earnings (target variable) can be explained by the independent variables of our choice.

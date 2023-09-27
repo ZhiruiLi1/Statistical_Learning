@@ -1,0 +1,399 @@
+---
+title: "DATA2020HW5"
+author: "Zhirui Li"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# 1. Mixed-Effect Models
+
+(a)
+This is a random intercept model where the measured outcome $y_{i,j}$ is correlating with a person. The distribution of $\alpha_{i}$ suggests that the intercept for each person $i$ is different according to a normal distribution with a mean $\alpha_{0} + u_{i}\alpha$ and a variance $\sigma_{alpha}^2$ for the response variable $y_{i,j}$. The above model is equivalent to:
+
+$$
+y_{i,j} = \alpha_{0} + u_{i}\alpha + x_{i,j}\beta + subject_{i} + \epsilon_{i,j} \:\: where \: subject_{i} \sim N(0, \: \sigma_{\alpha}^2) \: and \: \epsilon_{i,j} \sim N(0,\: \sigma_{\gamma}^2)
+$$
+This is because instead of using $\alpha_{i}$, we can just put the mean of $\alpha_{i}$ into the equation. Then, $subject_{i}$ will account for the variance of $\alpha_{i}$. Thus, it becomes a linear regression model with random intercept accounts for different person $i$. 
+
+
+(b)
+The standard deviation in $y_{i,j}$ for a fixed person $i$ is $\epsilon_{i,j}$. The standard deviation in $y_{i,j}$ for a random person $i$ is $\epsilon_{i,j} + \sigma_{\alpha}$. This model allows the intercept to differ depending on person but the effect of the covariate is the same $\beta$ for all persons(subjects). 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(ggfortify)
+library(GGally) # For ggcor()
+library(Hmisc)
+library(naniar) # For vis_miss() function to visualize missing data
+library(repr) # For adjusting plot sizes
+options(repr.plot.width=10, repr.plot.height=8)
+library(glmnet) # For ridge and LASSO
+library(lme4) # For multi-level modeling
+library(psych)
+library(optimx)
+library(InformationValue)
+library(lmtest)
+```
+
+
+# 2. Factor Analysis 
+This questions uses the data set called five_personality.csv. This data set is a subset of responses from an online personality survey that is based on the Five Personality Model. Consider only the first 50 variables of this data set and take a look to the five pers codebook.txt for variable descriptions. You can take the test yourself here https://openpsychometrics.org/tests/IPIP-BFFM/.
+
+(a) Perform a factor analysis with 5 factors with no rotation. What is the total variance explained?
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+five <- read_csv("~/Desktop/five_personality.csv")
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+vis_miss(five, warn_large_data = FALSE)
+```
+
+From above graph, we can see that there are only a few missing data. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+five_50 = five[,1:50]
+five_50 = na.omit(five_50)
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+five_50 <- five_50 %>% 
+    mutate(across(.cols = names(five_50), .fns = as.numeric))
+summary(five_50)
+```
+
+We convert all the variables to numerical. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+factor_analysis <- fa(five_50, nfactors=5, rotate = "none")
+```
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+factor_analysis$loadings
+```
+
+Above are the loading scores when we perform factor analysis for the data set five_personality.csv with first 50 features. 
+
+Here SS loadings represent the variance, or the eigenvalue for each factor. The first factor has an eigenvalue of 6.469. The proportion of variance explained by this factor is $6.469/50 = 0.129$. Here, 50 refers to the total features presented in the data set.
+
+Since we don't used any rotation here, it is hard to understand what is each factor capturing because almost all features have a loading score for each factor.  
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+factor_analysis$uniquenesses
+```
+
+Above table represents the remaining variance for each feature that hasn't been explained by the factors we created. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+apply(factor_analysis$loadings^2, 1, sum)
+```
+
+Above table represents the variance for each feature that has been explained by the factors we created. We can see that our model doesn't explain features such as EST4, AGR1, OPN4, OPN9, etc. well. 
+
+
+
+
+```{r, message=FALSE, warning=FALSE}
+sum(apply(factor_analysis$loadings^2, 1, sum))/50
+```
+
+The total percentage of variance explained by our factor analysis model is about 38.76%, which is not really good and we probably should use more factors in our model. 
+
+
+(b) Now perform the factor analysis with 5 factors and with the varimax rotation (remember to not scale the data). Comment on the differences and determine whether you would consider adding more factors.
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+factor_analysis_vari <- fa(five_50, nfactors=5, rotate = "varimax")
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+factor_analysis_vari$loadings
+```
+
+Above are the loading scores when we perform factor analysis with varimax rotation for the data set five_personality.csv with first 50 features. 
+
+Here SS loadings represent the variance, or the eigenvalue of each factor. The first factor has an eigenvalue of 4.775. The proportion of variance explained by this factor is $4.775/50 = 0.095$. Here, 50 refers to the total features presented in the data set.
+
+Since we apply varimax rotation to the factor analysis, it is much easier to interpret what each factor is capturing. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+factor_analysis_vari$uniquenesses
+```
+
+Above table represents the remaining variance for each feature that hasn't been explained by the factors we created using five factors and varimax rotation. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+apply(factor_analysis_vari$loadings^2, 1, sum)
+```
+
+Above table represents the variance for each feature that has been explained by the factors we created in the factor analysis model with varimax rotation. We can see that our model doesn't explain features such as EST4, AGR1, OPN4, OPN9, etc. well. 
+
+
+```{r, message=FALSE, warning=FALSE}
+sum(apply(factor_analysis_vari$loadings^2, 1, sum))/50
+```
+
+Model with varimax rotation doesn't change the communalities or total variance explained; it just going to maximize each $\lambda_{ij}$ in the model we created for each variable in our original data set. A varimax rotation will try to find high loadings to lead to more interpretable factors. 
+
+
+(c) Given your preferred model with five factors, look at the factor loadings matrix and interpret the factors. What would you rename these factors?
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+factor_analysis_vari$loadings
+```
+
+We will use the model with varimax rotation because it is much easier to interpret the result.
+
+The first factor captures 9.5% of variance of the original data set. The second factor captures 9.3% of variance of the original data set. The third factor captures 7.2% of variance of the original data set. The fourth factor captures 6.4% of variance of the original data set. The fifth factor captures 6.3% of variance of the original data set. The cumulative variance captured is around 38.8%. 
+
+For the first factor, we can see that it has large positive loadings and large negative loadings for features EXT1 to EXT10. This means that features EXT1 to EXT10 highly influence factor 1. I will rename the first factor as whether or not you are communicative because all the questions are related to whether or not you like to communicate with others. 
+
+For the second factor, we can see that it has large positive loadings for features ARG1 to EST10. This means that features EST1 to EST10 highly influence factor 2. I will rename the second factor as whether or not you are anxious because all the questions are related to whether or not you have anxiety. 
+
+For the third factor, we can see that it has large positive loadings and large negative loadings for features ARG1 to ARG10. This means that features ARG1 to ARG10 highly influence factor 3. I will rename  the third factor as whether or not you are sympathetic because all the questions are related to whether or not you have sympathy. 
+
+For the fourth factor, we can see that it has large positive loadings and large negative loadings for features OPN1 TO OPN10. This means that features OPN1 to OPN10 highly influence factor 4. I will rename the fourth factor as whether or not you are curious or imaginative because all the questions are related to whether or not you have curiosity and imagination. 
+
+For the fifth factor, we can see that it has large positive loadings and large negative loadings for features CSN1 to CSN10. This means that features CSN1 to CSN10 highly influence factor 5. I will rename the fifth factor as whether or not you are careful and organized because all the questions are related to whether or not you follow a schedule or like order etc.
+
+
+# 3. Longitudinal Data Application
+This problem will use the data set framingham multi.csv, which can be found in the Data folder on Canvas. This data is a subset of data from the Framingham Heart Study (https://www. framinghamheartstudy.org/) and contains health information for patients over time. For our teaching purposes, some methods were employed to ensure an anonymous dataset that protects patient confidentiality. The variables are given below.
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+ramingham <- read_csv("~/Desktop/framingham_multi.csv")
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+vis_miss(ramingham)
+```
+
+From above graph, we can see that there are no missing data. 
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+ramingham <- ramingham %>% 
+    mutate(across(.cols=c(RANDID, SEX, EDUC, CURSMOKE, DIABETES, PREVHYP, PERIOD), .fns = as.factor))
+summary(ramingham)
+```
+
+We convert all the categorical variables to factor and print out the summary table. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+ramingham <- ramingham %>%
+    mutate(across(.cols=c(TOTCHOL, AGE, SYSBP, DIABP, CIGPDAY, BMI, HEARTRTE, GLUCOSE, TIME), .fns = ~ (.x-mean(.x))/sd(.x)))
+summary(ramingham)
+```
+
+We standardize all the continuous variables to help convergence for optimization and print out the summary table. 
+
+
+```{r, message=FALSE, warning=FALSE}
+length(unique(ramingham$RANDID))
+```
+
+There are total 500 different participants (500 subjects). 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+# Split into test and train sets
+set.seed(1)
+samp.size = floor(0.8*nrow(ramingham))
+train.ind = sample(nrow(ramingham), size = samp.size)
+ramingham.train = ramingham[train.ind,]
+ramingham.test = ramingham[-train.ind,]
+dim(ramingham.train)
+dim(ramingham.test)
+```
+
+We split the whole data set into train and test set. The dimension for the training set is (1200, 16). The dimension for the testing set is (300, 16). 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+ggcorr(ramingham, label = TRUE)
+```
+
+From above correlation table, we can see that DIABP and SYSBP are highly correlated. TIME and AGE also have a noticeable correlation. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+lm1 = glmer(PREVHYP ~  SEX + AGE + EDUC + TOTCHOL + SYSBP + DIABP + CURSMOKE + CIGPDAY + BMI + DIABETES + HEARTRTE + GLUCOSE + PERIOD + TIME + (1|RANDID), data=ramingham.train, family = 'binomial', control=glmerControl(optimizer='optimx', optCtrl=list(method='nlminb'), nAGQ=9))
+```
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+summary(lm1)
+```
+
+We build the first model based on all the available covariates in our data set. We also use random intercept for the covariate RANDID. This means that for each participant, we allow for a different intercept for the model to predict prevalent hypertensive. 
+
+The first model tells us that the only significant covariates at 5% significance level are: SEX, AGE, SYSBP, DIABP, BMI, and HEARTRTE. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+lm2 = glmer(PREVHYP ~ SEX + AGE + SYSBP + DIABP + BMI + HEARTRTE + (1|RANDID), data=ramingham.train, family = 'binomial', control=glmerControl(optimizer='optimx', optCtrl=list(method='nlminb'), nAGQ=9))
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+summary(lm2)
+```
+
+After we delete all the insignificant covariates and rerun the model, the AIC and BIC increase. This indicates that we have deleted too much predictors. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+lrtest(lm1, lm2)
+```
+
+The likelihood-ratio test also tells us that we should stick with the full model because of the super low p-value. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+lm3 = glmer(PREVHYP ~  SEX + AGE + TOTCHOL + SYSBP + DIABP + CURSMOKE + BMI + DIABETES + HEARTRTE + GLUCOSE+ TIME + (1|RANDID), data=ramingham.train, family = 'binomial', control=glmerControl(optimizer='optimx', optCtrl=list(method='nlminb'), nAGQ=9))
+```
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+summary(lm3)
+```
+
+For model 3, we delete EDUC, CIGPDAY, and PERIOD from our model. We delete EDUC because education seems not to relate to whether you have hypertensive. We delete CIGPDAY and PERIOD because CIGPDAY and CURSMOKE are really similar; TIME and PERIOD are really similar as well.
+
+In the third model, all the covariates are significant besides DIABETES. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+lrtest(lm1, lm3)
+```
+
+The likelihood-ratio test also tells us that we should stick with the reduced model because of the high p-value. 
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+lm4 = glmer(PREVHYP ~  SEX + AGE + TOTCHOL + SYSBP + DIABP + CURSMOKE + BMI + HEARTRTE + GLUCOSE+ TIME + (1|RANDID), data=ramingham.train, family = 'binomial', control=glmerControl(optimizer='optimx', optCtrl=list(method='nlminb'), nAGQ=9))
+```
+
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+summary(lm4)
+```
+
+The fourth model deletes covariate DIABETES. The BIC for the fourth model has slightly decreased. This time, the significant covariates are: AGE, SYSBP, DIABP, BMI, HEARTRTE, and TIME. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+lrtest(lm3, lm4)
+```
+
+The likelihood-ratio test tells us that we should stick with the reduced model, which is model 4. 
+
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+lm5 = glmer(PREVHYP ~ AGE + SYSBP + DIABP + BMI + HEARTRTE + TIME + (1|RANDID), data=ramingham.train, family = 'binomial', control=glmerControl(optimizer='optimx', optCtrl=list(method='nlminb'), nAGQ=9))
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+summary(lm5)
+```
+
+From the summary table, we can see that all the predictors(fixed effects) for model 5 are significant. The BIC also improves a lot compared to model 4. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+lrtest(lm4, lm5)
+```
+
+The likelihood-ratio test tells us that at 5% significance level, we fail to reject the null and should stick with the reduced model, which is model 5. Moreover, model 5 has far more less predictors, which is easier to interpret. 
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+qqnorm(resid(lm5))
+qqline(resid(lm5), col = "red")
+plot(predict(lm5), residuals(lm5),xlab="Fitted Values",ylab="Residuals") 
+```
+
+Above are the normal-QQ plot and residuals vs. fitted values plot for the model 5. Since model 5 is a logistic regression model, it is not really useful to look at the diagnostic plots to evaluate normality assumptions. Moreover, logistic regression doesn't have normality assumption on residuals. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+ranef_randid = as.data.frame(ranef(lm5))
+ranef_randid[1:10,]
+```
+
+Above table shows 10 intercept values for different subjects(participants). For example, if you are a participant with identification number 6238, then your intercept for your model predicting response PREVHYP is -1.143168e-01. This intercept value is different for all the participants, but the coefficients for all the other covariates in the model are the same for all participants. 
+
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+prob <- predict(lm5, newdata = ramingham.test, type = "response", allow.new.levels = TRUE)
+pred <- ifelse(prob>0.5, 1, 0)
+table(pred, ramingham.test$PREVHYP)
+```
+
+Above table shows the prediction result for the model 5 on the test data set. 
+
+
+
+```{r, message=FALSE, warning=FALSE}
+sum(pred == ramingham.test$PREVHYP)/nrow(ramingham.test)
+```
+
+The accuracy of model 5 on test set is 85.33%.
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+plotROC(ramingham.test$PREVHYP, prob, Show.labels=F)
+```
+
+The AUROC score for model 5 is 89.42%, which is pretty high and indicating that our model has done a great job. 
+
+
+# Code Appendix:
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+
+
+
+

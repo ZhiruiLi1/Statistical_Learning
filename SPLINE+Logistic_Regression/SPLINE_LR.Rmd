@@ -1,0 +1,373 @@
+---
+title: "DATA2020HW3"
+author: "Zhirui Li"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+# 1. Logistic Regression
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+library(tidyverse)
+library(dplyr)
+library(lmtest)
+library(InformationValue)
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+tb_risk <- read_csv("Desktop/tb_risk.csv")
+attach(tb_risk)
+```
+
+```{r, message=FALSE, warning=FALSE}
+# Missing quite a few rows for outcome - will omit missing data
+sum(complete.cases(tb_risk$tb))/nrow(tb_risk)
+```
+
+There is no missing values in column tb. We can conduct complete-case analysis, where we only keep observations with all variables observed. 
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+# convert all no to 0 and yes to 1 in column tb
+tb_risk <- tb_risk %>% mutate(tb = ifelse(tb == 2, 0, 1))
+head(tb_risk)
+dim(tb_risk)
+```
+
+We print out the first 6 rows of the dataset "tb_risk" we are working with. 
+
+The original number of rows is 1634.
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+tb_risk <- na.omit(tb_risk)
+dim(tb_risk)
+```
+
+After we omitting rows with NA, the number decreases to 1347. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+glm.1 <- glm(tb~., data = tb_risk, family="binomial")
+summary(glm.1)
+```
+
+The first glm model tells us that only predictors such as female, hiv_neg, diabetes, and num_symptoms are significant. For the categorical variable age_group, only levels such as age from 45 to 55 and age from 55 to 99 are significant, so that we one hot encode age below 45 as a new level and age above 45 as a new level. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+tb_risk <- tb_risk %>% mutate(age_group = ifelse(age_group == "[45,55)" | 
+                                                 age_group == "[55,99)", 1, 0))
+head(tb_risk)
+```
+
+Above table shows us after one hot encoding column age_group, I convert all people whose age is below 45 to 0 and all people whose age is above 45 to 1. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+glm.2 <- glm(tb~ age_group+female+hiv_neg+diabetes+num_symptoms, data = tb_risk, family="binomial")
+summary(glm.2)
+```
+
+The second glm model tells us that all predictors are really significant besides diabetes, so that I further investigate whether or not to include it in our model. 
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+glm.3 <- glm(tb~ age_group+female+hiv_neg+num_symptoms, data = tb_risk, family="binomial")
+summary(glm.3)
+```
+
+Above summary table shows the model without the predictor diabetes. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+lrtest(glm.1, glm.2)
+```
+
+First, we are comparing between glm.1 and glm.2. Glm.2 doesn't include predictors such as ever_smoke, past_tb, and two_weeks_symp. Since the p-value is really large here, we fail to reject the null and stick with the reduced model glm.2. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+lrtest(glm.2, glm.3)
+```
+
+Next, we are comparing between glm.2 and glm.3. Glm.3 doesn't include predictor diabetes. Since the p-value is relatively small here, we reject the null and stick with the full model glm.2.
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+summary(glm.2)
+```
+
+So glm.2 is our final model. The coefficient for age_group means that if you age is above 45, then the odds of having TB will being multiplied by $e^{-0.561933} = 0.5701059832$. The coefficient for female means that if you are a female, then the odds of having TB will being multiplied by $e^{-0.882290} = 0.4138341456$. The coefficient for hiv_neg means that if you are HIV positive, then the odds of having TB will being multiplied by $e^{-1.169079} = 0.3106529209$. The coefficient for diabetes means that if you are diagnosed with diabetes, then the odds of having TB will being multiplied by $e^{0.784111} = 2.190458757$. The coefficient for num_symptoms means that if you have one more TB-related symptom, then the odds of having TB will being multiplied by $e^{0.690664} = 1.9950398$. 
+
+The most important predictor here is diabetes because it has the strongest multiplicative effect on the response. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+prob <- predict(glm.3, newdata = tb_risk, type = "response")
+pred_vote <- ifelse(prob > 0.5, 1, 0)
+table(pred_vote, tb_risk$tb)
+```
+
+Above is the confusion matrix for the model glm.3. The true negative (TN) is 506, the false negative (FN) is 201, the true positive (TP) is 473, and the false positive (FP) is 167. 
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+accuracy = (506+473)/(506+473+167+201)
+sensitivity = 473/(473+201)
+specificity = 506/(506+167)
+sensitivity
+specificity
+accuracy
+```
+
+The sensitivity for this model is 0.7017804, which means that among all the true predictions, 70.17804% are actually true (actually have the TB disease). The formular is given by: 
+TP/(TP + FN).
+
+The specificity for this model is 0.7518574, which means that among all the false predictions, 75.18574% are actually false (actually don't have the TB disease). The formular is given by:
+TN / (TN + FP). 
+
+The accuracy for this model is 0.7268003, which calculates the percentage of accurate predictions. The formular is given by: (TP + TN)/(TP + TN + FP + FN). 
+
+
+```{r, message=FALSE, warning=FALSE, out.width="50%", echo = FALSE}
+plotROC(tb_risk$tb, prob) 
+# true labels, predicted probability
+```
+
+From above graph, we can see that given a randomly-selected diseased person (with TB) and a randomly-selected healthy person, there is an 78.36% chance that this model (glm.3) ranks the diseased person higher than the healthy person. Having a AUROC of 0.7836 indicates that the model has done a decent job. 
+
+
+
+```{r, message=FALSE, warning=FALSE, out.width="50%", echo = FALSE}
+tb_risk$prob <- prob
+portion = dim(tb_risk)[1] / 10  # 134.7
+portion
+tb_risk$prob_grp <- ceiling(order(prob)/portion) 
+# order() returns the indexes in increasing order
+# ceiling(3.4) = 4
+
+calibration_df <- tb_risk %>% 
+  group_by(prob_grp) %>%
+  summarize(avg_tb = mean(tb == 1), avg_prob = mean(prob))
+
+calibration_df
+
+ggplot(calibration_df)+geom_point(aes(x=avg_prob,y=avg_tb))+
+  geom_abline(aes(slope=1,intercept=0), col="red")
+```
+
+The x axis for the calibration plot represents the average probability in one bucket, the y axis represents the percentage of class 1 observations in that bucket. It measures whether the estimated distribution match the actual distribution. From above plot, we can see that the ten buckets do not match really well with the ideal red line, where the predicted probabilities equal the observed probabilities. As a result, this model doesn't capture the real distribution of the dataset. 
+
+
+
+# 2. Splines
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+library(GGally)
+library(splines)
+```
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+pressure_train <- read_csv("Desktop/pressure_train.csv")
+attach(pressure_train)
+```
+
+```{r, message=FALSE, warning=FALSE}
+sum(complete.cases(pressure_train$pressure))/nrow(pressure_train)
+pressure_train <- na.omit(pressure_train)
+dim(pressure_train)
+```
+There is no missing value in the dataset. 
+
+
+```{r, message=FALSE, warning=FALSE}
+pressure_train = pressure_train %>% select(-c(id, breath_id))
+```
+Since columns id and breath_id are useless in our analysis, we just delete them from the dataset. 
+
+
+```{r, message=FALSE, warning=FALSE, out.width="50%", echo = FALSE}
+mod1 = lm(pressure~., data = pressure_train)
+summary(mod1)
+plot(mod1)
+```
+
+The model 1 does a poor job because the adjusted R-Squared value is super low: only 38.66% of variation in the response can be explained by the predictors we have. Moreover, from the diagnostics plots, we can see a lot of problems. From the fitted values vs. residuals plot and fitted values vs. square root of standardized residuals plots, we can see that both the linearity and equal variance assumptions do not hold. From the Normal Q-Q plot, we can see that the normality assumption is violated as well. From the residuals vs leverage plot, we can see there are none influential points since all the points are within the Cook's distance. 
+
+
+```{r, message=FALSE, warning=FALSE, out.width="50%", echo = FALSE}
+ggpairs(pressure_train)
+```
+
+From the above scatter plot matrix, we can see that time_step and u_in seem to have a non linear relationship with the response variable pressure. So we are going to use splines to model the non-linear relationship here. 
+
+
+```{r, message=FALSE, warning=FALSE, out.width="50%", echo = FALSE}
+hist(pressure)
+hist(sqrt(pressure))
+hist(log(pressure))
+```
+
+Moreover, we observe that the histogram of the response variable pressure suggests that it is right-skewed, so after comparing square root transform and log transform, we choose square root transform on the pressure. 
+
+
+```{r, warning=FALSE, message=FALSE, out.width="50%"}
+delete_rows = which(is.nan(sqrt(pressure_train$pressure)))
+pressure_train = pressure_train[-delete_rows, ]
+dim(pressure_train)
+attach(pressure_train)
+```
+
+After completing the square root transform on the response, there is a warning messages telling us that NaNs are produced, so we delete rows that produce a NaN value. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+mod2 = lm(sqrt(pressure) ~ ., data = pressure_train)
+summary(mod2)
+```
+
+Above is the summary for the model 2 where we transform the response variable pressure and fit on the rest of the predictors in the dataset. We can see that the adjusted R-squared boosts to 43.64%. 
+
+
+```{r, message=FALSE, warning=FALSE, out.width="50%", echo = FALSE}
+plot(time_step, pressure)
+plot(u_in, pressure)
+plot(time_step, residuals(mod2))
+plot(u_in, residuals(mod2))
+
+```
+
+From above scatter plots between pressure and time_step and pressure and u_in and residuals vs covariate plots, we can see that there are non-linear relationships between the response and the covariates and we should use splines to capture the underlying distribution. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+knots_time_step <- quantile(time_step, c(0.1, 0.3, 0.5, 0.7, 0.9))
+knots_u_in <- quantile(u_in, c(0.1, 0.3, 0.5, 0.7, 0.9))
+
+
+mod3 <- lm(sqrt(pressure)~ns(time_step, knots = knots_time_step)+
+             ns(u_in, knots=knots_u_in)+R+C+u_out, data=pressure_train)
+summary(mod3)
+```
+
+After applying natural spline to predictors time_step and u_in, we can see that the adjusted R-squared boosts to 64.51%
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+mod4 <- lm(sqrt(pressure)~ns(time_step, knots = knots_time_step) + ns(u_in, knots=knots_u_in)+ R + C + u_out*time_step + u_in*time_step, data=pressure_train)
+summary(mod4)
+lrtest(mod3, mod4)
+```
+
+The model 4 tries to find potential interaction term and we first investigate whether it is necessary to consider the interaction term between u_out and time_step and u_in and time_step. 
+In order to test whether by including the interaction term is significant, we perform likelihood ration test and since the p-value under the likelihood ratio test is really small, we reject the null hypothesis and stick with the full model(include the interaction term). 
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+mod5 <- lm(sqrt(pressure)~ns(time_step, knots = knots_time_step) + ns(u_in, knots=knots_u_in)+ R + C + u_out*time_step + u_in*time_step +u_out*time_step*R + u_in*time_step*R, data=pressure_train)
+summary(mod5)
+lrtest(mod4, mod5)
+```
+
+Model 5 tries to investigate whether by including 3-way interaction terms (u_out, time_step, and R; u_in, time_step, and R) are significant. Here we see that the adjusted R-squared value increases a little bit. 
+
+By running the lrtest, we see that the p-value is really small. Thus, we reject the null hypothesis and stick with the full model(include the 3-way interaction terms). 
+
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+mod6 <- lm(sqrt(pressure)~ns(time_step, knots = knots_time_step) + ns(u_in, knots=knots_u_in)+ R + C + u_out*time_step + u_in*time_step + u_out*time_step*R + u_in*time_step*R + u_out*time_step*C + u_in*time_step*C , data=pressure_train)
+summary(mod6)
+lrtest(mod5, mod6)
+```
+
+The model 6 investigates again for potential 3-way interaction terms: u_out, time_step, and C; u_in, time_step, and C. The adjusted R-squared for model 6 increases a little bit and likelihood ratio test also tells us that the additional interaction terms are significant for the model. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+mod7 <- lm(sqrt(pressure)~ns(time_step, knots = knots_time_step) + log(u_in+1) + R + C + u_out*time_step + u_in*time_step + u_out*time_step*R + u_in*time_step*R + u_out*time_step*C + u_in*time_step*C , data=pressure_train)
+summary(mod7)
+```
+
+The model 7 tries to figure out whether a simpler transformation on the predictor u_in will provide a better result. In this case, I choose log transform. I add 1 to the predictor u_in to prevent undefined numbers. The adjusted R-squared in this case decreases to 0.6639, which indicates that this is a worse model compared to model 6. 
+
+
+```{r, message=FALSE, warning=FALSE, echo = FALSE}
+summary(mod6)
+```
+
+Thus, model 6 is our final model to predict pressure.
+
+Our final model consists of two natural splines, two predictors, two 2-way interaction terms, and four 3-way interaction terms to model the square root of the dependent variable pressure. Most of the predictors in our model are significant besides the 2-way interaction term C and u_out and the 2-way interaction term C and u_in. Those two predictors are generated because we include 3-way interaction terms in our model. 
+
+In summary, the adjust R-squared value for our final model is 69.24%, which means that 69.24% variation in the response variable pressure can be explained by the predictors we have in the model 6. 
+
+
+```{r, message=FALSE, warning=FALSE, out.width="50%", echo = FALSE}
+plot(mod6)
+```
+
+Above is the diagnostic plots for our final model model 6. From the residuals vs fitted values and square root of standardized residuals vs fitted values plots, we can see that our model still breaks the equal variance assumption but fixes the linearity assumption in the model 1. One thing to note that although we can still see some non-linearity pattern in the square root of standardized residuals vs fitted values plot, it is much better compared to the first model. The Normal Q-Q plot still doesn't look good. The leverage plot still suggests that there are no influential points because all the points are within the Cook's distance. Although observations such as 59553, 43713, and 55313 seem to have a relatively high leverage, the standardized residuals are small, which means that our model can predict those points really well. 
+
+
+
+```{r, message=FALSE, warning=FALSE, out.width="50%", echo = FALSE}
+time_step_grid <- seq(min(time_step), max(time_step), 0.01)
+df_new <- data.frame(time_step = time_step_grid)
+df_new$R <- mean(R)
+df_new$C <- mean(C)
+df_new$u_in <- mean(u_in)
+df_new$u_out <- 0
+pressure <- predict(mod6, df_new)
+plot(time_step_grid, pressure, xlab = "time_step")
+```
+
+Above graph illustrates how the spline is used to model the non-linear relationship between predictor time_step and response pressure. 
+
+
+
+```{r, message=FALSE, warning=FALSE, out.width="50%", echo = FALSE}
+u_in_grid <- seq(min(u_in), max(u_in), 0.1)
+df_new2 <- data.frame(u_in = u_in_grid)
+df_new2$R <- mean(R)
+df_new2$C <- mean(C)
+df_new2$time_step <- mean(time_step)
+df_new2$u_out <- 0
+pressure <- predict(mod6, df_new2)
+plot(u_in_grid, pressure, xlab = "u_in")
+```
+
+Above graph illustrates how the spline is used to model the non-linear relationship between predictor u_in and response pressure. 
+
+
+
+# Code Appendix:
+
+```{r ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,1 @@
+This repository is a comprehensive collection of advanced statistical learning projects covering pivotal topics such as Linear and Logistic Regression, SPLINE, Multinomial and Mixed Effects Models, Factor Analysis, etc. 
